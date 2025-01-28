@@ -54,7 +54,7 @@ async function uploadFile(filePath, relativePath, config) {
 }
 
 // Funktion zum Verarbeiten von Dateien
-function processFiles(dir, baseDir = '', config) {
+async function processFiles(dir, baseDir = '', config) {
   result = { ok: 0, failed: 0 }
 
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -64,11 +64,11 @@ function processFiles(dir, baseDir = '', config) {
     const relativePath = path.join(baseDir, entry.name);
 
     if (entry.isDirectory()) {
-      const r = processFiles(fullPath, relativePath, config);
+      const r = await processFiles(fullPath, relativePath, config);
       result.ok += r.ok;
       result.failed += r.failed;
     } else {
-      const success = uploadFile(fullPath, baseDir, config);
+      const success = await uploadFile(fullPath, baseDir, config);
       if (success) {
         result.ok++;
       } else {
