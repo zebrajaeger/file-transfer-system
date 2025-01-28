@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js"
+    "start": "nodemon index.js",
+    "up": "docker compose up --build -d",
+    "down": "docker compose down",
+    "restart": "docker compose down && docker compose up --build -d"
   },
   "keywords": [],
   "author": "",
