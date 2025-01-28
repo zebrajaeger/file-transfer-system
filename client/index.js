@@ -1,18 +1,26 @@
 const axios = require('axios');
-const fs = require('fs/promises');
-const fsSync = require('fs');
+const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
 const cron = require('node-cron');
+const cronParser = require('cron-parser');
+const humanizeDuration = require('humanize-duration');
 
 // Status-Flag, um parallele Übertragungen zu vermeiden
 let isRunning = false;
+
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
+
+if (!cron.validate(config.cronSchedule)) {
+  log('ERROR', 'Ungültiger Cron-String in der config.json.');
+  return;
+}
 
 // Logging-Funktion mit Priorität
 function log(priority, message) {
   const timestamp = new Date().toISOString();
   const logMessage = `[${timestamp}] [${priority}] ${message}\n`;
-  fsSync.appendFileSync('./client.log', logMessage);
+  fs.appendFileSync('./client.log', logMessage);
   console.log(logMessage.trim());
 }
 
@@ -23,10 +31,10 @@ async function uploadFile(filePath, relativePath, config) {
     return true;
   }
 
-  const stats = await fs.stat(filePath);
+  const stats = fs.statSync(filePath);
 
   const form = new FormData();
-  form.append('file', fsSync.createReadStream(filePath));
+  form.append('file', fs.createReadStream(filePath));
   form.append('relativePath', relativePath);
   form.append('createdAt', stats.birthtime.toISOString());
   form.append('modifiedAt', stats.mtime.toISOString());
@@ -46,31 +54,43 @@ async function uploadFile(filePath, relativePath, config) {
 }
 
 // Funktion zum Verarbeiten von Dateien
-async function processFiles(dir, baseDir = '', config) {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+function processFiles(dir, baseDir = '', config) {
+  result = { ok: 0, failed: 0 }
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     const relativePath = path.join(baseDir, entry.name);
 
     if (entry.isDirectory()) {
-      await processFiles(fullPath, relativePath, config);
+      const r = processFiles(fullPath, relativePath, config);
+      result.ok += r.ok;
+      result.failed += r.failed;
     } else {
-      const success = await uploadFile(fullPath, baseDir, config);
+      const success = uploadFile(fullPath, baseDir, config);
+      if (success) {
+        result.ok++;
+      } else {
+        result.failed++;
+      }
+
       if (success && config.deleteSourceFile) {
         if (config.dryRun) {
           log('INFO', `Dry Run: Würde Datei löschen: ${fullPath}`);
         } else {
-          await fs.unlink(fullPath);
+          fs.unlinkSync(fullPath);
           log('INFO', `Datei gelöscht: ${fullPath}`);
         }
       }
     }
   }
+
+  return result;
 }
 
 // Hauptprogramm: Steuerung durch Cron-Job
-async function startProcess() {
+function startProcess() {
   if (isRunning) {
     log('WARN', 'Übertragung läuft bereits, neue Übertragung wird ausgesetzt.');
     return;
@@ -79,38 +99,49 @@ async function startProcess() {
   isRunning = true;
   try {
     // Config einlesen
-    const config = JSON.parse(await fs.readFile('./config.json', 'utf-8'));
     const sourcePath = path.resolve(config.sourcePath);
 
     log('INFO', 'Übertragung gestartet.');
-    await processFiles(sourcePath, '', config);
-    log('INFO', 'Übertragung abgeschlossen.');
+    const result = processFiles(sourcePath, '', config);
+    log('INFO', `Übertragung abgeschlossen. ${JSON.stringify(result)}`);
   } catch (err) {
     log('ERROR', `Fehler während der Übertragung: ${err.message}`);
   } finally {
     isRunning = false;
   }
+  const next = cronParser.parseExpression(config.cronSchedule).next();
+  log('INFO', `Nächste Ausführung in ${getNextExecution(next)}: ${next} `);
 }
 
+function getNextExecution(cronDate) {
+  const nextExecution = cronDate.toDate(); // Konvertiere in ein Date-Objekt
+  const now = new Date();
+
+  const durationMs = nextExecution - now; // Differenz in Millisekunden
+
+  const humanReadableDuration = humanizeDuration(durationMs, {
+    largest: 3, // Zeige maximal 3 Zeiteinheiten
+    round: true, // Runde die Werte
+  });
+  return humanReadableDuration;
+}
+
+
 // Cron-Job einrichten
-async function setupCronJob() {
-  const config = JSON.parse(await fs.readFile('./config.json', 'utf-8'));
+function setupCronJob() {
   const cronSchedule = config.cronSchedule;
 
-  if (!cron.validate(cronSchedule)) {
-    log('ERROR', 'Ungültiger Cron-String in der config.json.');
-    return;
-  }
+  const next = cronParser.parseExpression(config.cronSchedule).next();
+  log('INFO', `Nächste Ausführung in ${getNextExecution(next)}: ${next} `);
 
   cron.schedule(cronSchedule, startProcess);
   log('INFO', `Cron-Job mit Zeitplan "${cronSchedule}" gestartet.`);
 }
 
 // Initialisierung
-(async () => {
-  try {
-    await setupCronJob();
-  } catch (err) {
-    log('ERROR', `Fehler beim Starten des Clients: ${err.message}`);
-  }
-})();
+try {
+  setupCronJob();
+} catch (err) {
+  log('ERROR', `Fehler beim Starten des Clients: ${err.message}`);
+}
+
