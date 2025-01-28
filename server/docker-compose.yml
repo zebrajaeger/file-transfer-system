@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: fts-upload-server
     ports:
-      - "2999:3000"
+      - "2999:2999"
     volumes:
       - ./uploads:/app/uploads
       - ./config.json:/app/config.json:ro
