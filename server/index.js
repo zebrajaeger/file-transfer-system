@@ -14,6 +14,19 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const PORT = config.port || 3000;
 
+function getFormattedTimestamp() {
+  const now = new Date();
+  
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  
+  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+}
+
 // Multer-Konfiguration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -29,7 +42,16 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname); // Original-Dateiname beibehalten
+    const safeRelativePath = path.normalize(req.body.relativePath || '').replace(/^(\.\.(\/|\\|$))+/, '');
+    const uploadPath = path.join(UPLOAD_DIR, safeRelativePath);
+    const target = path.join(uploadPath, file.originalname);
+    if(fs.existsSync(target)){
+      const { name, ext } = path.parse(file.originalname);
+      const newFileName = `${name}.${getFormattedTimestamp()}${ext}`;
+      cb(null, newFileName); 
+    }else{
+      cb(null, file.originalname); // Original-Dateiname beibehalten
+    }
   },
 });
 
@@ -59,6 +81,6 @@ app.post('/upload', upload.any(), async (req, res) => {
 
 // Server starten
 app.listen(PORT, () => {
-  log(`Server läuft auf http://localhost:${PORT}`);
-  sendEmail('Server startet', `Server läuft auf http://localhost:${PORT}`)
+  log(`Server läuft auf http://0.0.0.0:${PORT}`);
+  sendEmail('Server startet', `Server läuft auf http://0.0.0.0:${PORT}`)
 });
