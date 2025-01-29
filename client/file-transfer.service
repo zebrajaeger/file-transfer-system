@@ -1,0 +1,23 @@
+[Unit]
+Description=File Transfer
+
+[Service]
+ExecStart=/home/pi/.nvm/versions/node/v22.13.1/bin/node ./src/client.js
+WorkingDirectory=/home/pi/prj/file-transfer-system/client
+
+# Restart service after 10 seconds if node service crashes
+RestartSec=10
+Restart=on-failure
+
+# Output to syslog
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=disk-watcher
+
+User=pi
+Group=pi
+
+Environment=PATH=/usr/bin:/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target
