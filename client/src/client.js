@@ -31,7 +31,7 @@ async function uploadFile(filePath, relativePath, config) {
 
   const form = new FormData();
   form.append('file', fs.createReadStream(filePath));
-  form.append('relativePath', relativePath);
+  form.append('relativePath', relativePath.replace(/\\/g, '/'));
   form.append('createdAt', stats.birthtime.toISOString());
   form.append('modifiedAt', stats.mtime.toISOString());
 
