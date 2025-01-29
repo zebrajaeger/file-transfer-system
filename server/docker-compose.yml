@@ -4,10 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fts-upload-server
+    user: 1000:1000
     ports:
       - "2999:2999"
     volumes:
-      - ./uploads:/app/uploads
+      - ./upload:/app/upload
       - ./config.json:/app/config.json:ro
       - ./server.log:/app/server.log
     restart: unless-stopped
